@@ -10,16 +10,19 @@ import qs from 'qs';
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState('');
+    const [userId, setUserId] = useState('');
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         async function loadStorageData() {
             const storageUser = await AsyncStorage.getItem('@RNAuth:user');
+            const storageUserId = await AsyncStorage.getItem('@RNAuth:userId');
             const storageToken = await AsyncStorage.getItem('@RNAuth:token');
             setLoading(false);
             if (storageUser && storageToken) {
                 api.defaults.headers.Authorization = `Bearer ${storageToken}`;
                 setUser(storageUser);
+                setUserId(storageUserId);
                 setLoading(false);
             }
         }
@@ -44,18 +47,21 @@ export const AuthProvider = ({ children }) => {
 
         await api.post('/oauth/token', data, options)
             .then(async (response) => {
-                
-                
 
                 setUser(response.data.nome);
+                setUserId(response.data.id);
+
+                console.log('Login userId: ', response.data.id);
+                
 
                 api.defaults.headers.Authorization = `Bearer ${response.data.access_token}`;
                 await AsyncStorage.setItem('@RNAuth:user', response.data.nome);
                 await AsyncStorage.setItem('@RNAuth:token', response.data.access_token);
-               
-                var decoded = jwt_decode(response.data.access_token);
+                await AsyncStorage.setItem('@RNAuth:userId', JSON.stringify(response.data.id));
                 
-                await AsyncStorage.setItem('@RNAuth:user_email', decoded.user_name);
+                //var decoded = jwt_decode(response.data.access_token);
+                
+                //await AsyncStorage.setItem('@RNAuth:user_email', decoded.user_name);
 
             })
             .catch((error) => { 
@@ -143,7 +149,6 @@ export const AuthProvider = ({ children }) => {
             .then(async (response) => {
                 dados = response.data;
                 setUser(dados.nome);
-                console.log(JSON.stringify(response));
             })
             .catch((error) => { 
                 console.log(JSON.stringify(error));
@@ -156,15 +161,66 @@ export const AuthProvider = ({ children }) => {
             return dados;
     }
 
+    async function getListaProjetos(userId) {
+
+        var options = {
+            headers: { 
+                'Content-Type': 'application/json'
+            }
+        };
+
+        var listaProjetos = [];
+        console.log('buscar projetos do userId: ', userId);
+        await api.get(`/projetos/por-id-pessoa/${userId}`)
+            .then(async (response) => {
+                listaProjetos = response.data;
+            })
+            .catch((error) => { 
+                console.log(JSON.stringify(error));
+                if(error.message === 'Request failed with status code 400') {
+                    alert('Erro ao buscar a lista de projetos.');
+                } else {
+                    alert('Erro ao buscar a lista de projetos! Tente novamente mais tarde.');
+                }
+            }); 
+            return listaProjetos;
+    }
+
+    async function getListaTarefas(idProjeto) {
+
+        var options = {
+            headers: { 
+                'Content-Type': 'application/json'
+            }
+        };
+
+        var listaTarefas;
+
+        await api.get(`/por-id-projeto/${idProjeto}`)
+            .then(async (response) => {
+                listaTarefas = response.data;
+            })
+            .catch((error) => { 
+                console.log(JSON.stringify(error));
+                if(error.message === 'Request failed with status code 400') {
+                    alert('Erro ao buscar a lista de tarefas.');
+                } else {
+                    alert('Erro ao buscar a lista de tarefas! Tente novamente mais tarde.');
+                }
+            }); 
+            return listaTarefas;
+    }
+
     function logout() {
         AsyncStorage.clear().then(() => {
             setUser(null);
+            setUserId(null);
         });
     }
 
     return(
-        <AuthContext.Provider value={{signed: !!user, user, login, logout, loading, 
-            cadastrar, getDadosUsuario, getDadosUsuario, alterarCadastro}}>
+        <AuthContext.Provider value={{signed: !!user, user, userId, login, logout, loading, 
+            cadastrar, getDadosUsuario, alterarCadastro, getListaProjetos, getListaTarefas}}>
             {children}
         </AuthContext.Provider>
     );
